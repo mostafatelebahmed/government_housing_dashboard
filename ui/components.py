@@ -85,7 +85,7 @@ def render_map(gdf, zoom_target=None):
             },
             tooltip=folium.GeoJsonTooltip(
                 fields=['project_name', 'city', 'housing_type', 'condition', 'buildings_count', 'floors_count', 'units_count'],
-                aliases=['المشروع:', 'الموقع:', 'النوع:', 'الحالة:', 'عمارات:', 'أدوار:', 'وحدات:'],
+                aliases=['إسم الإسكان:', 'الموقع:', 'النوع:', 'الحالة:', 'عمارات:', 'أدوار:', 'وحدات:'],
                 localize=True,
                 style="font-family: 'Cairo', sans-serif; font-size: 14px;"
             )
