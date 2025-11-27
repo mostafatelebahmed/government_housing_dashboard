@@ -100,62 +100,98 @@ else:
     st.session_state['data'] = gpd.GeoDataFrame()
 # --- Sidebar Filters ---
 with st.sidebar:
-    st.markdown("## أدوات التحكم")
-    with st.expander(" رفع البيانات", expanded=True):
-        uploaded_file = st.file_uploader("ملفات Excel/GeoJSON", type=['xlsx', 'csv', 'geojson', 'json'])
+    st.markdown("## 🌪️ Filters")
+    
+    # 1. تعريف المتغيرات الأساسية للبيانات
+    gdf = st.session_state['data']
+    filtered_gdf = gdf.copy() if not gdf.empty else gpd.GeoDataFrame()
+    
+    # 2. كود الفلاتر (وضعناه في الأول ليظهر في الأعلى)
+    if not gdf.empty:
+        # فلتر المحافظة
+        if 'governorate' in gdf.columns:
+            govs = ['الكل'] + sorted(list(gdf['governorate'].dropna().unique()))
+            sel_gov = st.selectbox("📍 المحافظة", govs)
+            if sel_gov != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['governorate'] == sel_gov]
+
+        # فلتر المدينة
+        if 'city' in gdf.columns:
+            cities = ['الكل'] + sorted(list(filtered_gdf['city'].dropna().unique()))
+            sel_city = st.selectbox("🏙️ المدينة / المركز", cities)
+            if sel_city != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['city'] == sel_city]
+
+        st.markdown("---")
+        
+        # باقي الفلاتر
+        if 'housing_type' in gdf.columns:
+            types = ['الكل'] + sorted(list(filtered_gdf['housing_type'].dropna().unique()))
+            sel_type = st.selectbox("🏠 نوع الإسكان", types)
+            if sel_type != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['housing_type'] == sel_type]
+
+        if 'owner' in gdf.columns:
+            owners = ['الكل'] + sorted(list(filtered_gdf['owner'].dropna().unique()))
+            sel_owner = st.selectbox("🏢 الجهة المالكة", owners)
+            if sel_owner != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['owner'] == sel_owner]
+
+        if 'condition' in gdf.columns:
+            conds = ['الكل'] + sorted(list(filtered_gdf['condition'].dropna().unique()))
+            sel_cond = st.selectbox("🛠️ الحالة العامة", conds)
+            if sel_cond != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['condition'] == sel_cond]
+
+        if 'decisions' in gdf.columns:
+            decs = ['الكل'] + sorted(list(filtered_gdf['decisions'].dropna().unique()))
+            sel_dec = st.selectbox("📜 القرارات الصادرة", decs)
+            if sel_dec != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['decisions'] == sel_dec]
+        
+        if 'gas_connection' in gdf.columns:
+            gas_opts = ['الكل'] + sorted(list(filtered_gdf['gas_connection'].dropna().unique()))
+            sel_gas = st.selectbox("🔥 توصيل الغاز", gas_opts)
+            if sel_gas != 'الكل':
+                filtered_gdf = filtered_gdf[filtered_gdf['gas_connection'] == sel_gas]
+                
+        st.caption(f"المشاريع المطابقة: {len(filtered_gdf)}")
+    else:
+        filtered_gdf = gpd.GeoDataFrame()
+        st.info("لا توجد بيانات لعرض الفلاتر.")
+
+    # 3. فاصل لتوضيح نهاية الفلاتر
+    st.markdown("---")
+    
+    # 4. كود رفع البيانات (نقلناه للأسفل)
+    # جعلنا expanded=False عشان ما ياخدش مساحة إلا لو احتاجته
+    with st.expander("📂 إدارة البيانات (رفع/حذف)", expanded=False):
+        uploaded_file = st.file_uploader("رفع ملف بيانات جديد", type=['xlsx', 'csv', 'geojson', 'json'])
+        
         if uploaded_file:
             file_type = uploaded_file.name.split('.')[-1]
             with st.spinner('جاري المعالجة...'):
                 new_data = process_upload(uploaded_file, file_type)
                 if not new_data.empty:
                     st.session_state['data'] = new_data
+                    st.session_state['is_default'] = False
                     st.success("تم التحميل!")
-
-    gdf = st.session_state['data']
-    # Filters (Sequential)
-    filtered_gdf = gdf.copy() if not gdf.empty else gpd.GeoDataFrame()
-    
-    if not gdf.empty:
-        st.markdown("### 🌪️ الفلاتر")
-        if 'governorate' in gdf.columns:
-            govs = ['الكل'] + sorted(list(gdf['governorate'].dropna().unique()))
-            sel_gov = st.selectbox("المحافظة", govs)
-            if sel_gov != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['governorate'] == sel_gov]
-
-        if 'city' in gdf.columns:
-            cities = ['الكل'] + sorted(list(filtered_gdf['city'].dropna().unique()))
-            sel_city = st.selectbox("المدينة / المركز", cities)
-            if sel_city != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['city'] == sel_city]
-
-        st.markdown("---")
         
-        if 'housing_type' in gdf.columns:
-            types = ['الكل'] + sorted(list(filtered_gdf['housing_type'].dropna().unique()))
-            sel_type = st.selectbox("نوع الإسكان", types)
-            if sel_type != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['housing_type'] == sel_type]
+        # # زر الاستعادة
+        # if not st.session_state.get('is_default', False) and os.path.exists(DEFAULT_DATA_PATH):
+        #     if st.button("🔄 استعادة الافتراضي"):
+        #         st.session_state['data'] = load_geojson(DEFAULT_DATA_PATH)
+        #         st.session_state['is_default'] = True
+        #         st.rerun()
+                
+        # # زر الحذف
+        # if not st.session_state['data'].empty:
+        #     if st.button("🗑️ حذف البيانات", type="primary"):
+        #         st.session_state['data'] = gpd.GeoDataFrame()
+        #         st.session_state['is_default'] = False
+        #         st.rerun()
 
-        if 'owner' in gdf.columns:
-            owners = ['الكل'] + sorted(list(filtered_gdf['owner'].dropna().unique()))
-            sel_owner = st.selectbox("الجهة المالكة", owners)
-            if sel_owner != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['owner'] == sel_owner]
-
-        if 'condition' in gdf.columns:
-            conds = ['الكل'] + sorted(list(filtered_gdf['condition'].dropna().unique()))
-            sel_cond = st.selectbox("الحالة العامة", conds)
-            if sel_cond != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['condition'] == sel_cond]
-
-        if 'decisions' in gdf.columns:
-            decs = ['الكل'] + sorted(list(filtered_gdf['decisions'].dropna().unique()))
-            sel_dec = st.selectbox("القرارات الصادرة", decs)
-            if sel_dec != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['decisions'] == sel_dec]
-        
-        if 'gas_connection' in gdf.columns:
-            gas_opts = ['الكل'] + sorted(list(filtered_gdf['gas_connection'].dropna().unique()))
-            sel_gas = st.selectbox("توصيل الغاز", gas_opts)
-            if sel_gas != 'الكل': filtered_gdf = filtered_gdf[filtered_gdf['gas_connection'] == sel_gas]
-    else:
-        filtered_gdf = gpd.GeoDataFrame()
-
+    # المتغير النهائي المستخدم في الخريطة
     final_map_gdf = filtered_gdf
 
 # --- TOP BAR (Blue/Gradient) ---
