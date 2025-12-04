@@ -11,47 +11,47 @@ import json
 #     idx = hash(str(housing_type)) % len(colors)
 #     return colors[idx]
 
-def render_map(gdf, zoom_target=None):
+def render_map(display_gdf, zoom_gdf=None, zoom_target=None):
     """
-    Renders map.
-    zoom_target: Optional list [minx, miny, maxx, maxy] to force zoom on specific project.
+    display_gdf: البيانات التي ستُرسم (كل المشاريع).
+    zoom_gdf: البيانات التي سنأخذ حدودها للزووم (المحافظة المختارة).
+    zoom_target: حدود مشروع معين (لو داس على الزر).
     """
-    # 1. Default Settings (Egypt)
     egypt_center = [26.8206, 30.8025]
     start_zoom = 6
-    
-    has_data = not gdf.empty and 'geometry' in gdf.columns
+    has_data = not display_gdf.empty and 'geometry' in display_gdf.columns
 
-    # 2. Determine Center & Zoom Strategy
-    # If a specific zoom target (button clicked) exists, prioritize it
+    # 1. تحديد الزووم (الكاميرا)
     fit_bounds_coords = None
     
+    # الحالة 1: المستخدم ضغط على زر مشروع معين (أعلى أولوية)
     if zoom_target:
-        # zoom_target is [minx, miny, maxx, maxy]
-        # folium expects [[miny, minx], [maxy, maxx]]
         fit_bounds_coords = [[zoom_target[1], zoom_target[0]], [zoom_target[3], zoom_target[2]]]
-        # Calculate center for init
-        center_lat = (zoom_target[1] + zoom_target[3]) / 2
-        center_lon = (zoom_target[0] + zoom_target[2]) / 2
-        start_zoom = 14 # Close zoom for specific project
-        
-    elif has_data:
+    
+    # الحالة 2: المستخدم اختار فلتر مكان (محافظة/مدينة)
+    elif zoom_gdf is not None and not zoom_gdf.empty:
         try:
-            bounds = gdf.total_bounds
-            center_lat = (bounds[1] + bounds[3]) / 2
-            center_lon = (bounds[0] + bounds[2]) / 2
-            start_zoom = 10 
-            # Fit to all data
+            # نأخذ حدود المحافظة/المدينة المختارة فقط
+            bounds = zoom_gdf.total_bounds
             fit_bounds_coords = [[bounds[1], bounds[0]], [bounds[3], bounds[2]]]
-        except:
-            center_lat, center_lon = egypt_center
-    else:
-        center_lat, center_lon = egypt_center
+        except: pass
+        
+    # الحالة 3: عرض عام (أول ما يفتح)
+    # لا نقوم بعمل fit_bounds هنا لنترك الحرية للمستخدم، أو نتركه على مصر
 
-    # 3. Initialize Map
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=start_zoom, tiles=None)
+    # 2. إنشاء الخريطة
+    m = folium.Map(location=egypt_center, zoom_start=start_zoom, tiles=None)
 
-    # 4. Layers
+    # 3. الطبقات (الترتيب مهم: الأولى هي الافتراضية)
+    
+    # --- (1) Street Map: الافتراضي (خفيف وسريع) ---
+    folium.TileLayer(
+        'OpenStreetMap', 
+        name='Street Map (شوارع)', 
+        control=True
+    ).add_to(m)
+
+    # --- (2) Satellite: اختياري (ثقيل) ---
     folium.TileLayer(
         tiles='https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
         attr='Esri',
@@ -59,30 +59,19 @@ def render_map(gdf, zoom_target=None):
         overlay=False,
         control=True
     ).add_to(m)
-    folium.TileLayer('OpenStreetMap', name='Street Map (شوارع)', control=True).add_to(m)
 
-    # 5. Data Layer (Uniform Color Fixed Here)
+    # 4. رسم البيانات (نرسم display_gdf بالكامل - لا نخفي شيئاً)
     if has_data:
-        # Force Zoom if calculated
+        # تطبيق الزووم إذا وجدنا إحداثيات (من زر أو فلتر)
         if fit_bounds_coords:
             m.fit_bounds(fit_bounds_coords)
         
-        geojson_data = json.loads(gdf.to_json())
+        geojson_data = json.loads(display_gdf.to_json())
         folium.GeoJson(
             geojson_data,
             name="Projects",
-            style_function=lambda x: {
-                'fillColor': '#3b82f6', # Uniform Blue Color
-                'color': '#1e40af',     # Darker Blue Border
-                'weight': 2,
-                'fillOpacity': 0.5
-            },
-            highlight_function=lambda x: {
-                'fillColor': '#f59e0b', # Orange on Hover
-                'color': 'white',
-                'weight': 3,
-                'fillOpacity': 0.8
-            },
+            style_function=lambda x: {'fillColor': '#3b82f6', 'color': '#1e40af', 'weight': 2, 'fillOpacity': 0.5},
+            highlight_function=lambda x: {'fillColor': '#f59e0b', 'color': 'white', 'weight': 3, 'fillOpacity': 0.8},
             tooltip=folium.GeoJsonTooltip(
                 fields=['project_name', 'city', 'housing_type', 'condition', 'buildings_count', 'floors_count', 'units_count'],
                 aliases=['المشروع:', 'الموقع:', 'النوع:', 'الحالة:', 'عمارات:', 'أدوار:', 'وحدات:'],
@@ -92,8 +81,7 @@ def render_map(gdf, zoom_target=None):
         ).add_to(m)
 
     folium.LayerControl(collapsed=True).add_to(m)
-    return st_folium(m, width="100%", height=600, returned_objects=["bounds"])
-
+    return st_folium(m, width="100%", height=600, returned_objects=["bounds", "last_object_clicked"])
 def render_charts(gdf):
     if gdf.empty: return
 
